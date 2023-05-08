@@ -1,0 +1,26 @@
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form">
+
+  <f:entry title="${it.name}" description="${it.description}">
+    <div name="parameter" description="${it.description}">
+      <input type="hidden" name="name" value="${it.name}" />
+      <select name="value" style="width:200px;">
+        <j:invokeStatic className="io.jenkins.plugins.changer.parameter.DownstreamPriorityDefinition" method="getPriorites" var="priorities" />
+        <j:forEach var="priority" items="${priorities}">
+          <j:choose>
+            <j:when test="${it.downstreamPriority.equals(priority.value)}">
+              <!--<option value="${priority}" selected="selected">${priority}</option>-->
+              <option value="${priority.value}" selected="true">${priority.name}</option>
+            </j:when>
+            <j:otherwise>
+              <!--<option value="${priority.value}">${priority.name}</option>-->
+              <option value="${priority.value}">${priority.name}</option>
+            </j:otherwise>
+          </j:choose>
+
+        </j:forEach>
+      </select> <j:whitespace />
+    </div>
+
+  </f:entry>
+
+</j:jelly>
