@@ -85,14 +85,6 @@ public class ChangerAction implements Action {
                 if(r != null) {
                     newRuns.put(r.getNumber(), r);
                 }
-
-//                runs.stream().filter(r -> r.getNumber() == buildNumber).forEach(r -> {
-//                    newRuns.add(r);
-//                });
-//                runs.stream().filter(r -> r.getParent().getFullDisplayName().equals(build)).forEach(r -> {
-//                    newRuns.add(r);
-//                });
-
             }
         });
 
@@ -106,9 +98,6 @@ public class ChangerAction implements Action {
                 if(item != null) {
                     newItems.put(id, item);
                 }
-//                items.stream().filter(i -> i.getId() == id).forEach(i -> {
-//                    newItems.add(i);
-//                });
             }
         });
 
@@ -138,7 +127,6 @@ public class ChangerAction implements Action {
                     long runId = run.getParent().getQueueItem().getId();
                     Arrays.stream(Jenkins.get().getQueue().getItems()).forEach(it -> {
                         if(it.getId() == runId) {
-//                            items.add(it);
                             items.put(it.getId(), it);
                         }
                     });
@@ -146,7 +134,6 @@ public class ChangerAction implements Action {
             }
         }
         BuildCache.getCache().getDownstreamBuilds(run).forEach(r -> {
-//            runs.add(r);
             runs.put(r.getNumber(), r);
             fetchRunAndItems(false, r, runs, items);
         });
@@ -154,16 +141,10 @@ public class ChangerAction implements Action {
         if(run.getParent() instanceof Queue.Task) {
             Arrays.stream(Queue.getInstance().getItems()).forEach(it -> {
                 if(isQueueItemCausedBy(it, run)) {
-//                    items.add(it);
                     items.put(it.getId(), it);
                 }
             });
         }
-
-//        BuildCache.getDownstreamQueueItems(run).forEach(r -> {
-//            items.add(r);
-//        });
-
     }
 
     public List<Run> getRunList() {
@@ -238,7 +219,6 @@ public class ChangerAction implements Action {
                 sb.append(r.getValue().getParent().getFullDisplayName());
 
                 // priority
-
                 ItemInfo itemInfo = StartedJobItemCache.get().getStartedItem(r.getValue().getParent().getFullDisplayName(), r.getValue().getNumber());
                 if(itemInfo != null) {
                     sb.append(":");
@@ -420,7 +400,7 @@ public class ChangerAction implements Action {
             itemInfo.setWeightSelection(newPriority);
         });
 
-        Jenkins.get().getQueue().maintain();
+        Jenkins.get().getQueue().scheduleMaintenance();
 
         rsp.forwardToPreviousPage(req);
 
@@ -455,47 +435,47 @@ public class ChangerAction implements Action {
         fetchRunAndItems(true, target, runs, items);
         filterRunAndItems(req, runs, items);
 
-        if(label.equals("built-in") || label.equals("default")) {
-            items.entrySet().forEach(i -> {
-                i.getValue().getActions(ParametersAction.class).forEach(action -> {
-                    action.getAllParameters().forEach(p -> {
-                        if(p instanceof LabelParameterValue) {
-                            i.getValue().removeAction(action);
-                            LOGGER.log(Level.INFO, "item:" + i.getValue().task.getName() + " built-in, old paramAction removed");
-                        }
-                    });
-                });
+        List<ParameterValue> pvs = new LinkedList<>();
+        items.entrySet().forEach(i -> {
+            Iterator<ParametersAction> actions = i.getValue().getActions(ParametersAction.class).iterator();
+            while(actions.hasNext()) {
+                ParametersAction action = actions.next();
+                Iterator<ParameterValue> params = action.getAllParameters().iterator();
+                while(params.hasNext()) {
+                    ParameterValue pv = params.next();
+                    if(pv instanceof LabelParameterValue) {
+                        LOGGER.log(Level.INFO, "item:" + i.getValue().task.getName() + " removing parameter:" + pv.getName() + " action:" + action.getDisplayName());
+                        i.getValue().removeAction(action);
+                    }
+                    else {
+                        pvs.add(pv);
+                    }
+                }
+            }
 
-            });
-
-        }
-        else {
-            items.entrySet().forEach(i -> {
-
-                // NodeLabelParameter plugin use ParametersAction as LabelAssignmentAction.
-                // If exists LabelParameterValue, remove it.
-                i.getValue().getActions(ParametersAction.class).forEach(action -> {
-                    List<ParameterValue> parameters = action.getAllParameters();
-                    parameters.forEach(p -> {
-                        if(p instanceof LabelParameterValue) {
-                            i.getValue().removeAction(action);
-                        }
-                    });
-                });
+            if(label.equals("default")) {
+                // do not add any label, all labels are removed.
+            }
+            else {
                 LabelParameterValue paramValue = new LabelParameterValue(label, label, false, new AllNodeEligibility());
-                ParametersAction parametersAction = new ParametersAction(paramValue);
-                i.getValue().addAction(parametersAction);
+                pvs.add(paramValue);
+            }
+            ParametersAction pa = new ParametersAction(pvs);
+            i.getValue().addAction(pa);
 
-                // Add requested label
-//                List<String> labels = new ArrayList<>();
-//                labels.add(newNode.getNodeName());
-//                NodeParameterValue paramValue = new NodeParameterValue(newNode.getNodeName(), labels, new AllNodeEligibility());
-//                ParametersAction parametersAction = new ParametersAction(paramValue);
-//                i.addAction(parametersAction);
+            // debug check remove/add
+            /*
+            i.getValue().getActions(ParametersAction.class).forEach(it -> {
+                List<ParameterValue> parameters = it.getAllParameters();
+                parameters.forEach(pv -> {
+                    LOGGER.log(Level.INFO, "Kenny debug2 parameter:" + pv.getName());
+                });
             });
-        }
+            */
+        });
 
-        Jenkins.get().getQueue().maintain();
+
+        Jenkins.get().getQueue().scheduleMaintenance();
         rsp.forwardToPreviousPage(req);
     }
 
@@ -576,7 +556,7 @@ public class ChangerAction implements Action {
 
         }
 
-        Jenkins.get().getQueue().maintain();
+        Jenkins.get().getQueue().scheduleMaintenance();
 
 
         rsp.forwardToPreviousPage(req);
