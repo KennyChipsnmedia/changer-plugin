@@ -23,11 +23,6 @@ public class DownstreamPriorityDefinition  extends SimpleParameterDefinition {
         this.downstreamPriority = downstreamPriority;
     }
 
-//    protected DownstreamPriorityDefinition(String name, String description) {
-//        super(name, description);
-//    }
-
-
     @Override
     public ParameterValue createValue(String value) {
         LOGGER.log(Level.FINE, "Kenny createValue 1 name:" + getName() + " value:" + value);
@@ -62,12 +57,7 @@ public class DownstreamPriorityDefinition  extends SimpleParameterDefinition {
     }
 
     public static ListBoxModel getPriorites() {
-//        List<String> priorites = new LinkedList<>();
         ListBoxModel items = PriorityConfiguration.get().getPriorities();
-//        items.forEach(it -> {
-//            priorites.add(it.value);
-//        });
-//        return priorites;
         return items;
 
     }

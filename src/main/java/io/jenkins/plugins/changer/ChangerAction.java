@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 public class ChangerAction implements Action {
     private static final Logger LOGGER = Logger.getLogger(ChangerAction.class.getName());
@@ -106,7 +107,6 @@ public class ChangerAction implements Action {
 
         items.clear();;
         items.putAll(newItems);
-        LOGGER.log(Level.INFO, "done filterRunAndItems");
 
     }
 
@@ -117,8 +117,10 @@ public class ChangerAction implements Action {
     }
 
     private void fetchRunAndItems(boolean isFirst, Run run, Map<Integer, Run> runs, Map<Long, Queue.Item> items) {
+        boolean canDismiss = true;
         if(isFirst) {
-
+            // do nothing
+            /*
             if(run.isBuilding()) {
                 runs.put(run.getNumber(), run);
             }
@@ -132,6 +134,7 @@ public class ChangerAction implements Action {
                     });
                 }
             }
+            */
         }
         BuildCache.getCache().getDownstreamBuilds(run).forEach(r -> {
             runs.put(r.getNumber(), r);
@@ -299,7 +302,7 @@ public class ChangerAction implements Action {
         Map<Integer, Run> runs = new LinkedHashMap<>();
 
         fetchRunAndItems(true, target, runs, items);
-        filterRunAndItems(req, runs, items);
+//        filterRunAndItems(req, runs, items);
 
         worker w1 = () -> {
             items.entrySet().forEach(i -> {
@@ -334,6 +337,7 @@ public class ChangerAction implements Action {
         }
 
         else if(flag == 2) {
+
             w2.doit();
         }
         else if(flag == 3) {
@@ -389,7 +393,7 @@ public class ChangerAction implements Action {
         Map<Integer, Run> runs = new LinkedHashMap();
 
         fetchRunAndItems(true, target, runs, items);
-        filterRunAndItems(req, runs, items);
+//        filterRunAndItems(req, runs, items);
 
         int tmpPriority = Integer.parseInt(priority);
         int newPriority = tmpPriority == -1 ? PrioritySorterConfiguration.get().getStrategy().getDefaultPriority() : tmpPriority;
@@ -433,13 +437,16 @@ public class ChangerAction implements Action {
 
 
         fetchRunAndItems(true, target, runs, items);
-        filterRunAndItems(req, runs, items);
+//        filterRunAndItems(req, runs, items);
 
-        List<ParameterValue> pvs = new LinkedList<>();
+
         items.entrySet().forEach(i -> {
             Iterator<ParametersAction> actions = i.getValue().getActions(ParametersAction.class).iterator();
+            List<ParameterValue> pvs = new LinkedList<>();
+
             while(actions.hasNext()) {
                 ParametersAction action = actions.next();
+
                 Iterator<ParameterValue> params = action.getAllParameters().iterator();
                 while(params.hasNext()) {
                     ParameterValue pv = params.next();
@@ -475,7 +482,7 @@ public class ChangerAction implements Action {
         });
 
 
-        Jenkins.get().getQueue().scheduleMaintenance();
+//        Jenkins.get().getQueue().scheduleMaintenance();
         rsp.forwardToPreviousPage(req);
     }
 
@@ -505,7 +512,7 @@ public class ChangerAction implements Action {
         Map<Integer, Run> runs = new LinkedHashMap<>();
 
         fetchRunAndItems(true, target, runs, items);
-        filterRunAndItems(req, runs, items);
+//        filterRunAndItems(req, runs, items);
 
         Node newNode = Jenkins.get().getNode(node);
         if(newNode != null) {
@@ -592,15 +599,19 @@ public class ChangerAction implements Action {
         @Override
         public Collection<? extends Action> createFor(@Nonnull Job target) {
 
-            List<Run> runList = target.getBuilds();
-            runList = ((RunList<Run>) runList).filter(r -> r.isBuilding());
-
+            LOGGER.log(Level.FINE, "Getting buildlist start for target:" + target.getName());
+//            List<Run> runList = target.getBuilds();
+            List<Run> runList = target.getNewBuilds();
+            LOGGER.log(Level.FINE, "Getting buildlist end for target:" + target.getName());
+            runList = runList.stream().filter(r -> r.isBuilding()).collect(Collectors.toList());
+//            runList = ((RunList<Run>) runList).filter(r -> r.isBuilding());
+            LOGGER.log(Level.FINE, "Filtered on building for target:" + target.getName());
             ArrayList<Run> runArrayList = new ArrayList<>(runList);
 
             Collections.sort(runArrayList, new Comparator<Run>() {
                 @Override
                 public int compare(Run o1, Run o2) {
-                    return o1.getNumber() - o2.getNumber();
+                    return o2.getNumber() - o1.getNumber();
                 }
             });
 

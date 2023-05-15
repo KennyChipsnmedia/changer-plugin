@@ -45,7 +45,7 @@ public class InjectPriorityQueueListener extends QueueListener {
                         List<ParameterDefinition> definitions = paramDefProp.getParameterDefinitions();
 
                         for(ParameterDefinition definition: definitions) {
-                            LOGGER.log(Level.INFO, "defintion displayName:" + definition.getDescriptor().getDisplayName() + " name:" + definition.getName());
+//                            LOGGER.log(Level.INFO, "defintion displayName:" + definition.getDescriptor().getDisplayName() + " name:" + definition.getName());
                             if(definition instanceof DownstreamPriorityDefinition) {
                                 List<ParametersAction> actions = build.getActions(ParametersAction.class);
 
@@ -79,64 +79,6 @@ public class InjectPriorityQueueListener extends QueueListener {
             }
         }
 
-        /*
-        Loop1:
-        for(Cause cause: causes) {
-            if(cause instanceof Cause.UpstreamCause) {
-                Cause.UpstreamCause upstreamCause = (Cause.UpstreamCause)cause;
-                Loop2:
-                for(Computer computer: Jenkins.get().getComputers()) {
-                    Loop3:
-                    for (Executor executor : computer.getExecutors()) {
-                        Run<?, ?> build = executor.getCurrentExecutable() instanceof Run ? (Run<?, ?>) executor.getCurrentExecutable() : null;
-                        if (build != null && build.isBuilding()) {
-                            if(upstreamCause.pointsTo(build)) {
-                                LOGGER.log(Level.FINE, "Kenny item:" + wi.task.getFullDisplayName() + " caused by:" + build.getParent().getName());
-                                ParametersDefinitionProperty paramDefProp = build.getParent().getProperty(ParametersDefinitionProperty.class);
-
-                                if(paramDefProp != null) {
-                                    List<ParameterDefinition> definitions = paramDefProp.getParameterDefinitions();
-                                    Loop4:
-                                    for(ParameterDefinition definition: definitions) {
-                                        LOGGER.log(Level.FINE, "defintion displayName:" + definition.getDescriptor().getDisplayName() + " name:" + definition.getName());
-
-                                        if(definition instanceof DownstreamPriorityDefinition) {
-                                            List<ParametersAction> actions = build.getActions(ParametersAction.class);
-                                            Loop5:
-                                            for(ParametersAction action: actions) {
-                                                ParameterValue pv = action.getParameter(definition.getName());
-                                                if (pv != null) {
-                                                    LOGGER.log(Level.FINE, "parameter name:" + pv.getName() + " value:" + pv.getValue());
-                                                    ItemInfo itemInfo = QueueItemCache.get().getItem(wi.getId());
-                                                    if(itemInfo == null) {
-                                                        LOGGER.log(Level.FINE, "item id:" + wi.getId() + " not cached");
-                                                    }
-                                                    else {
-                                                        if(pv.getValue() == null) {
-                                                            LOGGER.log(Level.INFO, "pv getValue null");
-                                                        }
-                                                        else {
-                                                            int newPriority = Util.tryParseNumber(pv.getValue().toString(), FAULT_NUMBER).intValue();
-                                                            if(newPriority != FAULT_NUMBER) {
-                                                                itemInfo.setPrioritySelection(newPriority);
-                                                                itemInfo.setWeightSelection(newPriority);
-                                                                break Loop1;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        */
     }
 
 }
