@@ -43,7 +43,7 @@ public class ChangerAction implements Action {
 
     @Override
     public String getIconFileName() {
-        return "/plugin/changer/img/change.png";
+        return "/plugin/changer/img/stop.png";
     }
 
     @Override
@@ -211,7 +211,10 @@ public class ChangerAction implements Action {
         fetchRunAndItems(true, target, runs, items);
 
         LOGGER.log(Level.INFO, "items ==>");
-        items.entrySet().forEach(i -> LOGGER.log(Level.INFO, "item id:" + i.getValue().getId() + " name:" + i.getValue().task.getFullDisplayName()));
+        items.entrySet().forEach(it -> LOGGER.log(Level.INFO, "item id:" + it.getValue().getId() + " name:" + it.getValue().task.getFullDisplayName()));
+
+        LOGGER.log(Level.INFO, "runs ==>");
+        runs.entrySet().forEach(it -> LOGGER.log(Level.INFO, "run buildNumber:" + it.getValue().getNumber() + " name:" + it.getValue().getParent().getFullDisplayName()));
 
         StringBuilder sb = new StringBuilder();
 
@@ -255,7 +258,7 @@ public class ChangerAction implements Action {
             // label
             Label label = i.getValue().getAssignedLabel();
             if(label == null) {
-                LOGGER.log(Level.WARNING, "label null cannot display label for item id:" + i.getValue().getId());
+//                LOGGER.log(Level.WARNING, "label null cannot display label for item id:" + i.getValue().getId());
             }
             else {
                 sb.append(":");

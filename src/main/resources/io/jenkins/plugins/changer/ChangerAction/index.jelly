@@ -113,7 +113,7 @@ THE SOFTWARE.
               </f:block>
             </f:form>
           </div>
-          <div style="margin-bottom:50px;border-top: 2px solid #ccc;"></div>
+          <div style="margin-bottom:50px;border-top: 2px solid #2196F3;"></div>
         </j:forEach>
       </j:if>
 
