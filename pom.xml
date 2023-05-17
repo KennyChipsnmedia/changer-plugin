@@ -11,7 +11,7 @@
     <artifactId>changer</artifactId>
     <version>${revision}</version>
     <packaging>hpi</packaging>
-    <name>Changer</name>
+    <name>[CNM]Changer</name>
     <url>https://github.com/jenkinsci/${project.artifactId}-plugin</url>
     <licenses>
         <license>
