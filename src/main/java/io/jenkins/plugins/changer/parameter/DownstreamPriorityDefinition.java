@@ -4,6 +4,7 @@ import hudson.Extension;
 import hudson.model.*;
 import hudson.util.ListBoxModel;
 import jenkins.advancedqueue.PriorityConfiguration;
+import jenkins.advancedqueue.PrioritySorterConfiguration;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
@@ -38,7 +39,8 @@ public class DownstreamPriorityDefinition  extends SimpleParameterDefinition {
 
     @Override
     public ParameterValue getDefaultParameterValue() {
-        return new StringParameterValue(getName(), "-1");
+        int defaultPriority = PrioritySorterConfiguration.get().getStrategy().getDefaultPriority();
+        return new StringParameterValue(getName(), String.valueOf(defaultPriority));
     }
 
 

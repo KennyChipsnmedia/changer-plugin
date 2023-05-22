@@ -5,6 +5,7 @@ import hudson.Extension;
 import hudson.Util;
 import hudson.model.*;
 import hudson.model.queue.QueueListener;
+import jenkins.advancedqueue.PrioritySorterConfiguration;
 import jenkins.advancedqueue.sorter.ItemInfo;
 import jenkins.advancedqueue.sorter.QueueItemCache;
 import jenkins.model.Jenkins;
@@ -31,6 +32,7 @@ public class InjectPriorityQueueListener extends QueueListener {
     @SuppressFBWarnings
     @Override
     public void onLeaveWaiting(Queue.WaitingItem wi) {
+        int defaultPriority = PrioritySorterConfiguration.get().getStrategy().getDefaultPriority();
 
         List<Cause> causes = wi.getCauses();
 
@@ -66,6 +68,9 @@ public class InjectPriorityQueueListener extends QueueListener {
                                             else {
                                                 int newPriority = Util.tryParseNumber(pv.getValue().toString(), FAULT_NUMBER).intValue();
                                                 if(newPriority != FAULT_NUMBER) {
+                                                    if(newPriority == -1) {
+                                                        newPriority = defaultPriority;
+                                                    }
                                                     itemInfo.setPrioritySelection(newPriority);
                                                     itemInfo.setWeightSelection(newPriority);
                                                     break Loop1;
