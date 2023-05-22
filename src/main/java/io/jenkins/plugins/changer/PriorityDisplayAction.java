@@ -62,10 +62,10 @@ public class PriorityDisplayAction implements Action {
     public String getPriorities() {
         StringBuilder sb = new StringBuilder();
 
-        LOGGER.log(Level.INFO, "Getting priorities for job:" + target.getParent().getFullDisplayName());
+        LOGGER.log(Level.FINE, "Getting priorities for job:" + target.getParent().getFullDisplayName());
 
         runList.stream().forEach(r -> {
-            LOGGER.log(Level.INFO, "r:" + r.getParent().getFullDisplayName());
+            LOGGER.log(Level.FINE, "r:" + r.getParent().getFullDisplayName());
             ItemInfo itemInfo = StartedJobItemCache.get().getStartedItem(r.getParent().getFullDisplayName(), r.getNumber());
             if(itemInfo != null) {
                 int buildNumber = r.getNumber();
@@ -78,7 +78,7 @@ public class PriorityDisplayAction implements Action {
             }
         });
 
-        LOGGER.log(Level.INFO, "priorities:" + sb.toString());
+        LOGGER.log(Level.FINE, "priorities:" + sb.toString());
         if(sb.toString().length() == 0) {
             return "No information, check this job is on building.";
         }

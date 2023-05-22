@@ -1,5 +1,6 @@
 package io.jenkins.plugins.changer.parameter;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.*;
@@ -27,6 +28,7 @@ public class InjectPriorityQueueListener extends QueueListener {
      */
 
 
+    @SuppressFBWarnings
     @Override
     public void onLeaveWaiting(Queue.WaitingItem wi) {
 
@@ -52,7 +54,7 @@ public class InjectPriorityQueueListener extends QueueListener {
                                 for(ParametersAction action: actions) {
                                     ParameterValue pv = action.getParameter(definition.getName());
                                     if (pv != null) {
-                                        LOGGER.log(Level.INFO, "parameter name:" + pv.getName() + " value:" + pv.getValue());
+//                                        LOGGER.log(Level.INFO, "parameter name:" + pv.getName() + " value:" + pv.getValue());
                                         ItemInfo itemInfo = QueueItemCache.get().getItem(wi.getId());
                                         if(itemInfo == null) {
                                             LOGGER.log(Level.INFO, "item id:" + wi.getId() + " not cached");

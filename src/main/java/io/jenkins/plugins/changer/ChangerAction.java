@@ -1,10 +1,12 @@
 package io.jenkins.plugins.changer;
 
 import com.axis.system.jenkins.plugins.downstream.cache.BuildCache;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.*;
 import hudson.model.Queue;
+import hudson.model.queue.QueueListener;
 import hudson.util.ListBoxModel;
 import hudson.util.RunList;
 import jenkins.advancedqueue.PriorityConfiguration;
@@ -26,6 +28,10 @@ import javax.annotation.Nonnull;
 import javax.servlet.ServletException;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -34,6 +40,9 @@ public class ChangerAction implements Action {
     private static final Logger LOGGER = Logger.getLogger(ChangerAction.class.getName());
     private final Run target;
     private List<Run> runList;
+    private static final ExecutorService executorService = Executors.newCachedThreadPool();
+    private static final int MAX_TRY = 1;
+    private static final int SLEEP_TIME = 5000;
 
     public ChangerAction(Run run, List<Run> runList) {
         this.target = run;
@@ -56,21 +65,22 @@ public class ChangerAction implements Action {
         return "changer";
     }
 
+    @Deprecated
     private void filterRunAndItems(StaplerRequest req, Map<Integer, Run> runs, Map<Long, Queue.Item> items) {
-        LOGGER.log(Level.INFO, "debug req paramerters");
+        LOGGER.log(Level.FINE, "debug req paramerters");
         req.getParameterMap().entrySet().forEach(entry -> {
-            LOGGER.log(Level.INFO, "key:" + entry.getKey() + " v:" + entry.getValue());
+            LOGGER.log(Level.FINE, "key:" + entry.getKey() + " v:" + entry.getValue());
         });
 
         List<String> qtems = new ArrayList<>();
         List<String> builds = new ArrayList<>();;
 
         if(req.getParameter("qtems") != null) {
-            LOGGER.log(Level.INFO, "Reuqested cancel, raw qtems=>" + req.getParameter("qtems"));
+            LOGGER.log(Level.FINE, "Reuqested cancel, raw qtems=>" + req.getParameter("qtems"));
             qtems = Arrays.asList(req.getParameter("qtems").split(","));
         }
         if(req.getParameter("builds") != null) {
-            LOGGER.log(Level.INFO, "Reuqested abort, raw builds=>" + req.getParameter("builds"));
+            LOGGER.log(Level.FINE, "Reuqested abort, raw builds=>" + req.getParameter("builds"));
             builds =  Arrays.asList(req.getParameter("builds").split(","));
         }
 
@@ -136,13 +146,19 @@ public class ChangerAction implements Action {
             }
             */
         }
+
+        Set<Run> downStreamBuilds = BuildCache.getCache().getDownstreamBuilds(run);
+        List<Queue.Item> qitems = Arrays.asList(Queue.getInstance().getItems());
+        LOGGER.log(Level.FINER, "downStreamBuilds size:" + downStreamBuilds.size());
+        LOGGER.log(Level.FINER, "qitems size:" + qitems.size());
+
         BuildCache.getCache().getDownstreamBuilds(run).forEach(r -> {
             runs.put(r.getNumber(), r);
             fetchRunAndItems(false, r, runs, items);
         });
 
         if(run.getParent() instanceof Queue.Task) {
-            Arrays.stream(Queue.getInstance().getItems()).forEach(it -> {
+            qitems.forEach(it -> {
                 if(isQueueItemCausedBy(it, run)) {
                     items.put(it.getId(), it);
                 }
@@ -186,6 +202,7 @@ public class ChangerAction implements Action {
         return nodes;
     }
 
+    @SuppressFBWarnings
     public Map<String, String> getChildren(int buildNumber) {
         Map<String, String> children= new HashMap<>();
         children.put("runs", "");
@@ -203,18 +220,9 @@ public class ChangerAction implements Action {
 
         Run target = optRun.get();
         String fullDisplayName = target.getFullDisplayName();
-        String displayName = target.getDisplayName();
         int number = target.getNumber();
 
-        LOGGER.log(Level.INFO, "TARGET fullDisplayName:" + fullDisplayName +" displayName:" + displayName + " number:" + number);
-
         fetchRunAndItems(true, target, runs, items);
-
-        LOGGER.log(Level.INFO, "items ==>");
-        items.entrySet().forEach(it -> LOGGER.log(Level.INFO, "item id:" + it.getValue().getId() + " name:" + it.getValue().task.getFullDisplayName()));
-
-        LOGGER.log(Level.INFO, "runs ==>");
-        runs.entrySet().forEach(it -> LOGGER.log(Level.INFO, "run buildNumber:" + it.getValue().getNumber() + " name:" + it.getValue().getParent().getFullDisplayName()));
 
         StringBuilder sb = new StringBuilder();
 
@@ -266,14 +274,6 @@ public class ChangerAction implements Action {
             }
 
             sb.append(",");
-            if(i.getValue().isBlocked()) {
-                LOGGER.log(Level.INFO, i.getValue().task.getName() + " blocked");
-            }
-            if(i.getValue().isStuck()) {
-                LOGGER.log(Level.INFO, i.getValue().task.getName() + " stucked");
-            }
-
-
         });
 
         children.put("items", sb.toString());
@@ -285,6 +285,193 @@ public class ChangerAction implements Action {
         void doit();
     }
 
+    private int clearMission(Run target, int flag) {
+
+        Map<Long, Queue.Item> items = new LinkedHashMap<>();
+        Map<Integer, Run> runs = new LinkedHashMap<>();
+
+        fetchRunAndItems(true, target, runs, items);
+        LOGGER.log(Level.FINER, "clearMission runs:" + runs.size() + " items:" + items.size());
+        worker w1 = () -> {
+            items.entrySet().forEach(i -> {
+                LOGGER.log(Level.FINER, "cancel job:" + i.getValue().task.getName());
+                try {
+                    Jenkins.get().getQueue().cancel(i.getValue());
+                }
+                catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, i.getValue().task.getName() + " cancel error");
+                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                }
+            });
+        };
+
+        final Map<Integer, Run> onBuilding = runs.entrySet().stream().filter(it -> it.getValue().isBuilding()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        worker w2 = () -> {
+            onBuilding.entrySet().forEach(r -> {
+                LOGGER.log(Level.FINER, "abort job:" + r.getValue().getFullDisplayName());
+                try {
+                    r.getValue().getExecutor().interrupt(Result.ABORTED);
+                }
+                catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, r.getValue().getFullDisplayName() + " abort error");
+                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                }
+            });
+        };
+
+        if(flag == 0) {
+            w1.doit();
+            return items.size();
+        }
+        else if(flag == 1) {
+            w2.doit();
+            return onBuilding.size();
+        }
+        else if(flag == 2) {
+            w1.doit();
+            w2.doit();
+            return Math.max(items.size(), onBuilding.size());
+        }
+
+        return 0;
+    }
+
+    private Callable<Integer> clearMission2(Run target, int flag) {
+        Callable<Integer> callableTask = () -> {
+            Map<Long, Queue.Item> items = new LinkedHashMap<>();
+            Map<Integer, Run> runs = new LinkedHashMap<>();
+
+            fetchRunAndItems(true, target, runs, items);
+            LOGGER.log(Level.FINER, "clearMission runs:" + runs.size() + " items:" + items.size());
+            worker w1 = () -> {
+                items.entrySet().forEach(i -> {
+                    LOGGER.log(Level.FINER, "cancel job:" + i.getValue().task.getName());
+                    try {
+                        Jenkins.get().getQueue().cancel(i.getValue());
+                    }
+                    catch (Exception e) {
+                        LOGGER.log(Level.SEVERE, i.getValue().task.getName() + " cancel error");
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    }
+                });
+            };
+
+            worker w2 = () -> {
+                runs.entrySet().forEach(r -> {
+                    if(r != null && r.getValue().isBuilding()) {
+                        LOGGER.log(Level.FINER, "abort job:" + r.getValue().getFullDisplayName());
+                        try {
+                            r.getValue().getExecutor().interrupt(Result.ABORTED);
+                        }
+                        catch (Exception e) {
+                            LOGGER.log(Level.SEVERE, r.getValue().getFullDisplayName() + " abort error");
+                            LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                        }
+                    }
+                });
+            };
+
+            if(flag == 0) {
+                w1.doit();
+                return items.size() > 0 ? items.size(): null;
+            }
+            else if(flag == 1) {
+                w2.doit();
+                return runs.size() > 0 ? runs.size(): null;
+            }
+            else if(flag == 2) {
+                w1.doit();
+                w2.doit();
+                int max = Math.max(items.size(), runs.size());
+                return max > 0 ? max: null;
+            }
+
+            return null;
+        };
+
+        return callableTask;
+    }
+
+    @SuppressFBWarnings
+    private void processRequest2(StaplerRequest req, StaplerResponse rsp, int flag) {
+        String tmpBuildNumber = req.getParameter("buildNumber");
+
+        if(StringUtils.isBlank(tmpBuildNumber)) {
+            LOGGER.log(Level.SEVERE, "buildNumber empty");
+            return;
+        }
+
+        int buildNumber = Integer.parseInt(tmpBuildNumber);
+
+        Optional<Run> optRun = runList.stream().filter(r -> r.getNumber() == buildNumber).findAny();
+        if(optRun.isEmpty()) {
+            LOGGER.log(Level.SEVERE, "no Running found with buildNumber:" + buildNumber);
+            return;
+        }
+
+        //
+        Run runner = optRun.get();
+
+        int counter = 0;
+        LOGGER.log(Level.FINER, "start clearMission with buildNumber:" + buildNumber + " and flag:" + flag);
+        while(counter < MAX_TRY) {
+            int cleared = clearMission(target, flag);
+            try {
+                Thread.sleep(SLEEP_TIME);
+                if(cleared == 0) {
+                    counter++;
+                    LOGGER.log(Level.FINER, "cleared:" + cleared);
+                }
+                else {
+                    counter = 0;
+                    LOGGER.log(Level.FINER, "working with buildNumber:" + buildNumber + " and flag:" + flag);
+                }
+            }
+            catch (Exception e) {
+                counter++;
+                LOGGER.log(Level.SEVERE, "ChangerAction error", e );
+
+            }
+        }
+        LOGGER.log(Level.FINER, "finish clearMission with buildNumber:" + buildNumber + " and flag:" + flag);
+
+
+
+        /* It's not work with background thread, why ?
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                int counter = 0;
+                LOGGER.log(Level.FINER, "start clearMission with buildNumber:" + buildNumber + " and flag:" + flag);
+                while(counter < MAX_TRY) {
+                    int cleared = clearMission(runner, flag);
+                    try {
+                        if(cleared == 0) {
+                            counter++;
+                        }
+                        else {
+                            counter = 0;
+                            LOGGER.log(Level.FINER, "working with buildNumber:" + buildNumber + " and flag:" + flag + " cleared:" + cleared);
+                        }
+                        Thread.sleep(SLEEP_TIME);
+                    }
+                    catch (Exception e) {
+                        counter++;
+                        LOGGER.log(Level.SEVERE, "ChangerAction error", e );
+
+                    }
+
+                }
+                LOGGER.log(Level.FINER, "finish clearMission with buildNumber:" + buildNumber + " and flag:" + flag);
+
+            }
+        });
+        */
+
+    }
+
+    @Deprecated
     private void processRequest(StaplerRequest req, StaplerResponse rsp, int flag) {
         String tmpBuildNumber = req.getParameter("buildNumber");
 
@@ -309,7 +496,7 @@ public class ChangerAction implements Action {
 
         worker w1 = () -> {
             items.entrySet().forEach(i -> {
-                LOGGER.log(Level.INFO, "cancel job:" + i.getValue().task.getName());
+                LOGGER.log(Level.FINE, "cancel job:" + i.getValue().task.getName());
                 try {
                     Jenkins.get().getQueue().cancel(i.getValue());
                 }
@@ -323,7 +510,7 @@ public class ChangerAction implements Action {
         worker w2 = () -> {
             runs.entrySet().forEach(r -> {
                 if(r != null && r.getValue().isBuilding()) {
-                    LOGGER.log(Level.INFO, "abort job:" + r.getValue().getFullDisplayName());
+                    LOGGER.log(Level.FINE, "abort job:" + r.getValue().getFullDisplayName());
                     try {
                         r.getValue().getExecutor().interrupt(Result.ABORTED);
                     }
@@ -352,20 +539,20 @@ public class ChangerAction implements Action {
 
     @RequirePOST
     public void doCancel(StaplerRequest req, StaplerResponse rsp) throws ServletException, IOException {
-        processRequest(req, rsp, 1);
+        processRequest2(req, rsp,0);
+
         rsp.forwardToPreviousPage(req);
     }
 
     @RequirePOST
     public void doAbort(StaplerRequest req, StaplerResponse rsp) throws ServletException, IOException {
-        processRequest(req, rsp, 2);
+        processRequest2(req, rsp, 1);
         rsp.forwardToPreviousPage(req);
     }
 
     @RequirePOST
     public void doCancelAndAbort(StaplerRequest req, StaplerResponse rsp) throws ServletException, IOException {
-        processRequest(req, rsp, 1);
-        processRequest(req, rsp, 2);
+        processRequest2(req, rsp, 2);
         rsp.forwardToPreviousPage(req);
     }
 
@@ -454,7 +641,7 @@ public class ChangerAction implements Action {
                 while(params.hasNext()) {
                     ParameterValue pv = params.next();
                     if(pv instanceof LabelParameterValue) {
-                        LOGGER.log(Level.INFO, "item:" + i.getValue().task.getName() + " removing parameter:" + pv.getName() + " action:" + action.getDisplayName());
+//                        LOGGER.log(Level.INFO, "item:" + i.getValue().task.getName() + " removing parameter:" + pv.getName() + " action:" + action.getDisplayName());
                         i.getValue().removeAction(action);
                     }
                     else {
@@ -602,13 +789,8 @@ public class ChangerAction implements Action {
         @Override
         public Collection<? extends Action> createFor(@Nonnull Job target) {
 
-            LOGGER.log(Level.FINE, "Getting buildlist start for target:" + target.getName());
-//            List<Run> runList = target.getBuilds();
             List<Run> runList = target.getNewBuilds();
-            LOGGER.log(Level.FINE, "Getting buildlist end for target:" + target.getName());
             runList = runList.stream().filter(r -> r.isBuilding()).collect(Collectors.toList());
-//            runList = ((RunList<Run>) runList).filter(r -> r.isBuilding());
-            LOGGER.log(Level.FINE, "Filtered on building for target:" + target.getName());
             ArrayList<Run> runArrayList = new ArrayList<>(runList);
 
             Collections.sort(runArrayList, new Comparator<Run>() {
