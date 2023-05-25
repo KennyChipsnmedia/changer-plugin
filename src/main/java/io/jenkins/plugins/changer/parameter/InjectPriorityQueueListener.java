@@ -1,5 +1,6 @@
 package io.jenkins.plugins.changer.parameter;
 
+import com.axis.system.jenkins.plugins.downstream.cache.BuildCache;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import hudson.Extension;
 import hudson.Util;
@@ -13,6 +14,7 @@ import jenkins.model.Jenkins;
 import org.springframework.security.core.userdetails.UserCache;
 
 import java.util.List;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -42,14 +44,20 @@ public class InjectPriorityQueueListener extends QueueListener {
             if(!rebuildCauses.isEmpty()) { // triggered by rebuild plugin
                 LOGGER.log(Level.INFO, "Triggerd by Rebuild, task:{0}", wi.task.getName());
                 Job<?, ?> job = Jenkins.get().getItemByFullName(wi.task.getName(), Job.class);
-                ParametersDefinitionProperty pdp = job.getProperty(ParametersDefinitionProperty.class);
-                List<ParameterDefinition> definitions = pdp.getParameterDefinitions().stream().filter(it -> it instanceof DownstreamPriorityDefinition).collect(Collectors.toList());
-                if(!definitions.isEmpty()) {
-                    DownstreamPriorityDefinition definition = (DownstreamPriorityDefinition)definitions.get(0);
-                    ParametersAction action = wi.getAction(ParametersAction.class);
-                    ParameterValue pv = action.getParameter(definition.getName());
+                Run<?, ?> lastBuild = job.getLastBuild();
+                Set<Run> downstreamBuilds = BuildCache.getCache().getDownstreamBuilds(lastBuild);
 
-                    setJobPriority(wi, pv, defaultPriority);
+                // Only executed when no downstream builds exist.
+                if(downstreamBuilds.isEmpty()) {
+                    ParametersDefinitionProperty pdp = job.getProperty(ParametersDefinitionProperty.class);
+                    List<ParameterDefinition> definitions = pdp.getParameterDefinitions().stream().filter(it -> it instanceof DownstreamPriorityDefinition).collect(Collectors.toList());
+                    if(!definitions.isEmpty()) {
+                        DownstreamPriorityDefinition definition = (DownstreamPriorityDefinition)definitions.get(0);
+                        ParametersAction action = wi.getAction(ParametersAction.class);
+                        ParameterValue pv = action.getParameter(definition.getName());
+
+                        setJobPriority(wi, pv, defaultPriority);
+                    }
                 }
             }
             else {
