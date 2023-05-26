@@ -72,20 +72,19 @@ public class InjectPriorityQueueListener extends QueueListener {
                     List<ParameterDefinition> definitions = pdp.getParameterDefinitions().stream().filter(it -> it instanceof DownstreamPriorityDefinition).collect(Collectors.toList());
                     if(!definitions.isEmpty()) {
                         DownstreamPriorityDefinition definition = (DownstreamPriorityDefinition)definitions.get(0);
-                        ParametersAction action = wi.getAction(ParametersAction.class);
+                        ParametersAction action = build.getAction(ParametersAction.class);
                         ParameterValue pv = action.getParameter(definition.getName());
                         setJobPriority(wi, pv, defaultPriority);
                     }
                 }
-
             }
         }
-
     }
 
     private void setJobPriority(Queue.WaitingItem wi, ParameterValue pv, int defaultPriority) {
         if (pv != null) {
-            LOGGER.log(Level.FINEST, "item:" + wi.task.getName() +  " parameter name:" + pv.getName() + " value:" + pv.getValue());
+            LOGGER.log(Level.FINEST, "item:" + wi.task.getName() +  " pa" +
+                "rameter name:" + pv.getName() + " value:" + pv.getValue());
             ItemInfo itemInfo = QueueItemCache.get().getItem(wi.getId());
             if(itemInfo == null) {
                 LOGGER.log(Level.INFO, "item id:" + wi.getId() + " not cached");
