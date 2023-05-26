@@ -145,6 +145,14 @@ public class ChangerAction implements Action {
                 }
             }
             */
+            if(run.getParent().getQueueItem() != null) {
+                long runId = run.getParent().getQueueItem().getId();
+                Arrays.stream(Jenkins.get().getQueue().getItems()).forEach(it -> {
+                    if(it.getId() == runId) {
+                        items.put(it.getId(), it);
+                    }
+                });
+            }
         }
 
         Set<Run> downStreamBuilds = BuildCache.getCache().getDownstreamBuilds(run);
@@ -337,61 +345,6 @@ public class ChangerAction implements Action {
         return 0;
     }
 
-    private Callable<Integer> clearMission2(Run target, int flag) {
-        Callable<Integer> callableTask = () -> {
-            Map<Long, Queue.Item> items = new LinkedHashMap<>();
-            Map<Integer, Run> runs = new LinkedHashMap<>();
-
-            fetchRunAndItems(true, target, runs, items);
-            LOGGER.log(Level.FINER, "clearMission runs:" + runs.size() + " items:" + items.size());
-            worker w1 = () -> {
-                items.entrySet().forEach(i -> {
-                    LOGGER.log(Level.FINER, "cancel job:" + i.getValue().task.getName());
-                    try {
-                        Jenkins.get().getQueue().cancel(i.getValue());
-                    }
-                    catch (Exception e) {
-                        LOGGER.log(Level.SEVERE, i.getValue().task.getName() + " cancel error");
-                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                    }
-                });
-            };
-
-            worker w2 = () -> {
-                runs.entrySet().forEach(r -> {
-                    if(r != null && r.getValue().isBuilding()) {
-                        LOGGER.log(Level.FINER, "abort job:" + r.getValue().getFullDisplayName());
-                        try {
-                            r.getValue().getExecutor().interrupt(Result.ABORTED);
-                        }
-                        catch (Exception e) {
-                            LOGGER.log(Level.SEVERE, r.getValue().getFullDisplayName() + " abort error");
-                            LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                        }
-                    }
-                });
-            };
-
-            if(flag == 0) {
-                w1.doit();
-                return items.size() > 0 ? items.size(): null;
-            }
-            else if(flag == 1) {
-                w2.doit();
-                return runs.size() > 0 ? runs.size(): null;
-            }
-            else if(flag == 2) {
-                w1.doit();
-                w2.doit();
-                int max = Math.max(items.size(), runs.size());
-                return max > 0 ? max: null;
-            }
-
-            return null;
-        };
-
-        return callableTask;
-    }
 
     @SuppressFBWarnings
     private void processRequest2(StaplerRequest req, StaplerResponse rsp, int flag) {
@@ -416,7 +369,7 @@ public class ChangerAction implements Action {
         int counter = 0;
         LOGGER.log(Level.FINER, "start clearMission with buildNumber:" + buildNumber + " and flag:" + flag);
         while(counter < MAX_TRY) {
-            int cleared = clearMission(target, flag);
+            int cleared = clearMission(runner, flag);
             try {
                 Thread.sleep(SLEEP_TIME);
                 if(cleared == 0) {
