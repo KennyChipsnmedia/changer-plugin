@@ -13,6 +13,8 @@ import jenkins.model.CauseOfInterruption;
 import jenkins.model.Jenkins;
 import org.springframework.security.core.userdetails.UserCache;
 
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
@@ -83,8 +85,7 @@ public class InjectPriorityQueueListener extends QueueListener {
 
     private void setJobPriority(Queue.WaitingItem wi, ParameterValue pv, int defaultPriority) {
         if (pv != null) {
-            LOGGER.log(Level.FINEST, "item:" + wi.task.getName() +  " pa" +
-                "rameter name:" + pv.getName() + " value:" + pv.getValue());
+            LOGGER.log(Level.FINEST, "item:" + wi.task.getName() +  " parameter name:" + pv.getName() + " value:" + pv.getValue());
             ItemInfo itemInfo = QueueItemCache.get().getItem(wi.getId());
             if(itemInfo == null) {
                 LOGGER.log(Level.INFO, "item id:" + wi.getId() + " not cached");
@@ -102,6 +103,28 @@ public class InjectPriorityQueueListener extends QueueListener {
                         }
                         itemInfo.setPrioritySelection(newPriority);
                         itemInfo.setWeightSelection(newPriority);
+
+                        // just for viewing information. after build done.
+                        Iterator<ParametersAction> actions = wi.getActions(ParametersAction.class).iterator();
+                        List<ParameterValue> pvs = new LinkedList<>();
+                        while(actions.hasNext()) {
+                            ParametersAction action = actions.next();
+                            Iterator<ParameterValue> params = action.getAllParameters().iterator();
+                            while (params.hasNext()) {
+                                ParameterValue param = params.next();
+                                if(param instanceof DownstreamPriorityParameterValue) {
+                                    DownstreamPriorityParameterValue dppv = new DownstreamPriorityParameterValue(param.getName(), String.valueOf(newPriority), param.getDescription());
+                                    pvs.add(dppv);
+                                    wi.removeAction(action);
+                                }
+                                else {
+                                    pvs.add(param);
+                                }
+                            }
+                        }
+                        ParametersAction pa = new ParametersAction(pvs);
+                        wi.addAction(pa);
+
                     }
                 }
             }

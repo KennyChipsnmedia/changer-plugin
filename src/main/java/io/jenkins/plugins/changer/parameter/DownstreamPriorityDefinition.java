@@ -27,27 +27,27 @@ public class DownstreamPriorityDefinition  extends SimpleParameterDefinition {
     @Override
     public ParameterValue createValue(String value) {
         LOGGER.log(Level.FINE, "Kenny createValue 1 name:" + getName() + " value:" + value);
-        return new StringParameterValue(getName(), value, getDescription());
+        return new DownstreamPriorityParameterValue(getName(), value, getDescription());
     }
 
     @Override
     public ParameterValue createValue(StaplerRequest req, JSONObject jo) {
         String value = jo.getString("value");
         LOGGER.log(Level.FINE, "Kenny createValue 2 name:" + getName() + " value:" + value);
-        return new StringParameterValue(getName(), value, getDescription());
+        return new DownstreamPriorityParameterValue(getName(), value, getDescription());
     }
 
     @Override
     public ParameterValue getDefaultParameterValue() {
         int defaultPriority = PrioritySorterConfiguration.get().getStrategy().getDefaultPriority();
-        return new StringParameterValue(getName(), String.valueOf(defaultPriority));
+        return new DownstreamPriorityParameterValue(getName(), String.valueOf(defaultPriority));
     }
 
 
     @Override
     public ParameterDefinition copyWithDefaultValue(ParameterValue defaultValue) {
-        if (defaultValue instanceof StringParameterValue) {
-            StringParameterValue value = (StringParameterValue) defaultValue;
+        if (defaultValue instanceof DownstreamPriorityParameterValue) {
+            DownstreamPriorityParameterValue value = (DownstreamPriorityParameterValue) defaultValue;
             return new DownstreamPriorityDefinition(value.getValue(), getName(), getDescription());
         } else {
             return this;
