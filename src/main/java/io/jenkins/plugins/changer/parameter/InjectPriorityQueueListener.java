@@ -95,7 +95,7 @@ public class InjectPriorityQueueListener extends QueueListener {
                     LOGGER.log(Level.INFO, "pv getValue null");
                 }
                 else {
-                    int newPriority = Util.tryParseNumber(pv.getValue().toString(), FAULT_NUMBER).intValue();
+                    int newPriority = Integer.parseInt(String.valueOf(Util.tryParseNumber(String.valueOf(pv.getValue()), FAULT_NUMBER)));
                     if(newPriority != FAULT_NUMBER) {
                         LOGGER.log(Level.FINEST, "item:{0} pname:{1}, pvalue:{2}", new Object[]{wi.task.getName(), pv.getName(), pv.getValue()});
                         if(newPriority == -1) {
