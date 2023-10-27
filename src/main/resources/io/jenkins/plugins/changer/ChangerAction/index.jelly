@@ -38,9 +38,9 @@ THE SOFTWARE.
       </j:if>
       <j:if test="${runList.size() != 0}">
         <j:forEach var="run" items="${runList}">
-          <h2>BUILD NUMBER: ${run.number}</h2>
+          <h2>BUILD NUMBER: ${run.number} ${run.displayName}</h2>
           <j:set var="children" value="${it.getChildren(run.number)}" />
-          <h3>QUEUE</h3>
+          <h3>QUEUE (${children.item_size})</h3>
           <div>
             <f:form method="post" action="cancel">
               <f:block>
@@ -89,7 +89,7 @@ THE SOFTWARE.
             </f:form>
           </div>
 
-          <h3>BUILD</h3>
+          <h3>BUILD (${children.run_size})</h3>
           <div>
             <f:form method="post" action="abort">
               <f:block>

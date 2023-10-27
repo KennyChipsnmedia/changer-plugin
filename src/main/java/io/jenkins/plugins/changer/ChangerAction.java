@@ -35,6 +35,7 @@ import java.util.concurrent.Future;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ChangerAction implements Action {
     private static final Logger LOGGER = Logger.getLogger(ChangerAction.class.getName());
@@ -234,8 +235,11 @@ public class ChangerAction implements Action {
 
         StringBuilder sb = new StringBuilder();
 
+        AtomicInteger building_num=new AtomicInteger(0);;
         runs.entrySet().forEach(r -> {
             if(r.getValue().isBuilding()) {
+                building_num.incrementAndGet();
+
                 sb.append(r.getValue().getNumber());
                 sb.append(":");
                 sb.append(r.getValue().getParent().getFullDisplayName());
@@ -248,9 +252,11 @@ public class ChangerAction implements Action {
                 }
                 sb.append(",");
             }
-        });
+        }
+        );
 
         children.put("runs", sb.toString());
+        children.put("run_size", building_num.get()+"");
         sb.setLength(0);
 
 
@@ -285,6 +291,7 @@ public class ChangerAction implements Action {
         });
 
         children.put("items", sb.toString());
+        children.put("item_size", items.size()+"");
 
         return children;
     }
@@ -294,7 +301,6 @@ public class ChangerAction implements Action {
     }
 
     private int clearMission(Run target, int flag) {
-
         Map<Long, Queue.Item> items = new LinkedHashMap<>();
         Map<Integer, Run> runs = new LinkedHashMap<>();
 
@@ -302,29 +308,40 @@ public class ChangerAction implements Action {
         LOGGER.log(Level.FINER, "clearMission runs:" + runs.size() + " items:" + items.size());
         worker w1 = () -> {
             items.entrySet().forEach(i -> {
-                LOGGER.log(Level.FINER, "cancel job:" + i.getValue().task.getName());
-                try {
-                    Jenkins.get().getQueue().cancel(i.getValue());
+                if (!i.getValue().task.getName().contains("confluence_uploader")){
+                    LOGGER.log(Level.FINER, "cancel job:" + i.getValue().task.getName());
+                    try {
+                        Jenkins.get().getQueue().cancel(i.getValue());
+                    }
+                    catch (Exception e) {
+                        LOGGER.log(Level.SEVERE, i.getValue().task.getName() + " cancel error");
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    }
                 }
-                catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, i.getValue().task.getName() + " cancel error");
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                else {
+                    LOGGER.log(Level.FINER, "do not cancel confluence_uploader : " + i.getValue().task.getName());
                 }
             });
+
         };
 
         final Map<Integer, Run> onBuilding = runs.entrySet().stream().filter(it -> it.getValue().isBuilding()).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         worker w2 = () -> {
             onBuilding.entrySet().forEach(r -> {
-                LOGGER.log(Level.FINER, "abort job:" + r.getValue().getFullDisplayName());
-                try {
-                    r.getValue().getExecutor().interrupt(Result.ABORTED);
+                if (!r.getValue().getFullDisplayName().contains("confluence_uploader")){
+                    LOGGER.log(Level.FINER, "abort job:" + r.getValue().getFullDisplayName());
+                    try {
+                        r.getValue().getExecutor().interrupt(Result.ABORTED);
+                    }
+                    catch (Exception e) {
+                        LOGGER.log(Level.SEVERE, r.getValue().getFullDisplayName() + " abort error");
+                        LOGGER.log(Level.SEVERE, e.getMessage(), e);
+                    }
                 }
-                catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, r.getValue().getFullDisplayName() + " abort error");
-                    LOGGER.log(Level.SEVERE, e.getMessage(), e);
-                }
+                else {
+                    LOGGER.log(Level.FINER, "do not abort confluence_uploader : " + r.getValue().getFullDisplayName());
+                    }
             });
         };
 
